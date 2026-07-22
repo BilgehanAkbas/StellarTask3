@@ -141,12 +141,12 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
           .addOperation(
             factory.call(
               "create_escrow",
-              nativeToScVal(publicKey),
-              nativeToScVal(form.seller),
-              nativeToScVal(form.arbiter),
-              nativeToScVal(form.token),
-              nativeToScVal(amountRaw),
-              nativeToScVal(deadlineLedger)
+              nativeToScVal(publicKey, { type: "address" }),
+              nativeToScVal(form.seller, { type: "address" }),
+              nativeToScVal(form.arbiter, { type: "address" }),
+              nativeToScVal(form.token, { type: "address" }),
+              nativeToScVal(amountRaw, { type: "i128" }),
+              nativeToScVal(deadlineLedger, { type: "u32" })
             )
           )
           .setTimeout(30)

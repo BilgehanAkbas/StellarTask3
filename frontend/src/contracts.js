@@ -50,7 +50,7 @@ export async function fetchEscrowStatus(factory, address) {
       fee: "100000",
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      .addOperation(factory.call("get_escrow_status", nativeToScVal(address)))
+      .addOperation(factory.call("get_escrow_status", nativeToScVal(address, { type: "address" })))
       .setTimeout(30)
       .build();
 
@@ -72,7 +72,7 @@ export async function fetchEscrowDetails(factory, address) {
       fee: "100000",
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      .addOperation(factory.call("get_escrow_details", nativeToScVal(address)))
+      .addOperation(factory.call("get_escrow_details", nativeToScVal(address, { type: "address" })))
       .setTimeout(30)
       .build();
 
@@ -143,7 +143,7 @@ export async function disputeEscrow(publicKey, escrowAddress, initiator, server)
     fee: "100000",
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(escrow.call("open_dispute", nativeToScVal(initiator)))
+    .addOperation(escrow.call("open_dispute", nativeToScVal(initiator, { type: "address" })))
     .setTimeout(30)
     .build();
 
@@ -191,7 +191,7 @@ export async function cancelEscrow(publicKey, escrowAddress, initiator, server) 
     fee: "100000",
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(escrow.call("cancel", nativeToScVal(initiator)))
+    .addOperation(escrow.call("cancel", nativeToScVal(initiator, { type: "address" })))
     .setTimeout(30)
     .build();
 
