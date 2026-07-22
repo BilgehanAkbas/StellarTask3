@@ -6,12 +6,13 @@ import {
   TransactionBuilder,
   Networks,
 } from "@stellar/stellar-sdk";
-import { signTransaction } from "@stellar/freighter-api";
 import { useFreighter } from "./hooks/useFreighter.js";
 import {
   fetchEscrows,
   fetchEscrowStatus,
   fetchEscrowDetails,
+  fetchTokenDecimals,
+  fetchLatestLedger,
   fundEscrow,
   releaseEscrow,
   refundEscrow,
@@ -20,7 +21,7 @@ import {
   claimTimeout,
   cancelEscrow,
   pollContractEvents,
-  waitForTransaction,
+  signAndSend,
   STATUS_LABEL,
   EVENT_TOPICS,
 } from "./contracts.js";
@@ -152,33 +153,10 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
           .setTimeout(30)
           .build();
 
-        const preparedTx = await server.prepareTransaction(tx);
-        const xdr = preparedTx.toEnvelope
-          ? preparedTx.toEnvelope().toXDR("base64")
-          : preparedTx.toXDR();
-
-        const { signedTxXdr: signed } = await signTransaction(xdr, {
-          network: NETWORK_PASSPHRASE,
-          networkPassphrase: NETWORK_PASSPHRASE,
-        });
-
-        const signedTx = TransactionBuilder.fromXDR(signed, NETWORK_PASSPHRASE);
-        const sendResult = await server.sendTransaction(signedTx);
-        if (sendResult.status === "ERROR") {
-          if (sendResult.errorResultXdr) {
-            throw new Error("Transaction failed: " + sendResult.errorResultXdr.slice(0, 100));
-          }
-          throw new Error("Transaction failed on-chain");
-        }
-
-        const finalResult = await waitForTransaction(server, sendResult.hash);
-        if (finalResult.status !== "SUCCESS") {
-          throw new Error(
-            finalResult.resultXdr
-              ? "Transaction failed: " + String(finalResult.resultXdr).slice(0, 150)
-              : "Transaction failed on-chain"
-          );
-        }
+        // Delegates signing/submission to the shared helper so simulation
+        // failures (wrong params, etc.) come back as a readable message
+        // instead of a raw XDR/diagnostic dump — see contracts.js.
+        await signAndSend(tx, server);
 
         setForm({ seller: "", arbiter: "", token: "", amount: "", deadlineDays: "7" });
         onCreated();
@@ -288,6 +266,8 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
   const [actionLoading, setActionLoading] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [currentLedger, setCurrentLedger] = useState(null);
+  const [tokenDecimals, setTokenDecimals] = useState(7);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,12 +275,20 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
       try {
         if (!publicKey) return;
         const factory = new Contract(FACTORY_ID);
-        const status = await fetchEscrowStatus(factory, address, publicKey);
-        const full = await fetchEscrowDetails(factory, address, publicKey);
+        const [status, full, latestLedger] = await Promise.all([
+          fetchEscrowStatus(factory, address, publicKey),
+          fetchEscrowDetails(factory, address, publicKey),
+          fetchLatestLedger().catch(() => null),
+        ]);
         if (!cancelled) {
           setDetails({ ...full, status: status || full.status, _address: address });
+          setCurrentLedger(latestLedger);
           setLoading(false);
           setActionError(null);
+        }
+        if (full?.token) {
+          const decimals = await fetchTokenDecimals(full.token, publicKey);
+          if (!cancelled) setTokenDecimals(decimals);
         }
       } catch (err) {
         if (!cancelled) {
@@ -352,7 +340,12 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
   const isBuyer = publicKey && details.buyer === publicKey;
   const isSeller = publicKey && details.seller === publicKey;
   const isArbiter = publicKey && details.arbiter === publicKey;
-  const amountDisplay = (Number(details.amount) / 10 ** 7).toFixed(7);
+  const amountDisplay = (Number(details.amount) / 10 ** tokenDecimals).toFixed(
+    Math.min(tokenDecimals, 7)
+  );
+  const deadlineLedger = Number(details.deadline_ledger);
+  const deadlinePassed = currentLedger != null && currentLedger >= deadlineLedger;
+  const ledgersRemaining = currentLedger != null ? Math.max(0, deadlineLedger - currentLedger) : null;
 
   return (
     <div className="bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-2xl p-6 transition-colors">
@@ -461,15 +454,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
                   className="bg-amber-600 hover:bg-amber-500"
                 />
               )}
-              {status === "Funded" && isBuyer && (
-                <ActionButton
-                  label="Open Dispute"
-                  loading={actionLoading === "disputeEscrow"}
-                  onClick={() => handleAction(disputeEscrow, publicKey)}
-                  className="bg-red-600 hover:bg-red-500"
-                />
-              )}
-              {status === "Funded" && isSeller && (
+              {status === "Funded" && (isBuyer || isSeller) && (
                 <ActionButton
                   label="Open Dispute"
                   loading={actionLoading === "disputeEscrow"}
@@ -478,12 +463,20 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
                 />
               )}
               {status === "Funded" && isBuyer && (
-                <ActionButton
-                  label="Claim Timeout"
-                  loading={actionLoading === "claimTimeout"}
-                  onClick={() => handleAction(claimTimeout)}
-                  className="bg-slate-600 hover:bg-slate-500"
-                />
+                <div className="flex flex-col gap-1">
+                  <ActionButton
+                    label="Claim Timeout"
+                    loading={actionLoading === "claimTimeout"}
+                    disabled={!deadlinePassed}
+                    onClick={() => handleAction(claimTimeout)}
+                    className="bg-slate-600 hover:bg-slate-500"
+                  />
+                  {!deadlinePassed && ledgersRemaining != null && (
+                    <span className="text-[10px] text-gray-500">
+                      Deadline'a ~{ledgersRemaining} ledger var
+                    </span>
+                  )}
+                </div>
               )}
               {status === "Disputed" && isArbiter && (
                 <>
@@ -517,11 +510,12 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
   );
 }
 
-function ActionButton({ label, loading, onClick, className }) {
+function ActionButton({ label, loading, disabled, onClick, className }) {
   return (
     <button
       onClick={onClick}
-      disabled={loading}
+      disabled={loading || disabled}
+      title={disabled && !loading ? "Bu işlem şu an için kullanılamıyor" : undefined}
       className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${className}`}
     >
       {loading ? (

@@ -1,0 +1,344 @@
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index 391ae3f..be014cd 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -6,12 +6,13 @@ import {
+   TransactionBuilder,
+   Networks,
+ } from "@stellar/stellar-sdk";
+-import { signTransaction } from "@stellar/freighter-api";
+ import { useFreighter } from "./hooks/useFreighter.js";
+ import {
+   fetchEscrows,
+   fetchEscrowStatus,
+   fetchEscrowDetails,
++  fetchTokenDecimals,
++  fetchLatestLedger,
+   fundEscrow,
+   releaseEscrow,
+   refundEscrow,
+@@ -20,7 +21,7 @@ import {
+   claimTimeout,
+   cancelEscrow,
+   pollContractEvents,
+-  waitForTransaction,
++  signAndSend,
+   STATUS_LABEL,
+   EVENT_TOPICS,
+ } from "./contracts.js";
+@@ -152,33 +153,10 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
+           .setTimeout(30)
+           .build();
+ 
+-        const preparedTx = await server.prepareTransaction(tx);
+-        const xdr = preparedTx.toEnvelope
+-          ? preparedTx.toEnvelope().toXDR("base64")
+-          : preparedTx.toXDR();
+-
+-        const { signedTxXdr: signed } = await signTransaction(xdr, {
+-          network: NETWORK_PASSPHRASE,
+-          networkPassphrase: NETWORK_PASSPHRASE,
+-        });
+-
+-        const signedTx = TransactionBuilder.fromXDR(signed, NETWORK_PASSPHRASE);
+-        const sendResult = await server.sendTransaction(signedTx);
+-        if (sendResult.status === "ERROR") {
+-          if (sendResult.errorResultXdr) {
+-            throw new Error("Transaction failed: " + sendResult.errorResultXdr.slice(0, 100));
+-          }
+-          throw new Error("Transaction failed on-chain");
+-        }
+-
+-        const finalResult = await waitForTransaction(server, sendResult.hash);
+-        if (finalResult.status !== "SUCCESS") {
+-          throw new Error(
+-            finalResult.resultXdr
+-              ? "Transaction failed: " + String(finalResult.resultXdr).slice(0, 150)
+-              : "Transaction failed on-chain"
+-          );
+-        }
++        // Delegates signing/submission to the shared helper so simulation
++        // failures (wrong params, etc.) come back as a readable message
++        // instead of a raw XDR/diagnostic dump — see contracts.js.
++        await signAndSend(tx, server);
+ 
+         setForm({ seller: "", arbiter: "", token: "", amount: "", deadlineDays: "7" });
+         onCreated();
+@@ -288,6 +266,8 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+   const [actionLoading, setActionLoading] = useState(null);
+   const [actionError, setActionError] = useState(null);
+   const [isExpanded, setIsExpanded] = useState(false);
++  const [currentLedger, setCurrentLedger] = useState(null);
++  const [tokenDecimals, setTokenDecimals] = useState(7);
+ 
+   useEffect(() => {
+     let cancelled = false;
+@@ -295,13 +275,21 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+       try {
+         if (!publicKey) return;
+         const factory = new Contract(FACTORY_ID);
+-        const status = await fetchEscrowStatus(factory, address, publicKey);
+-        const full = await fetchEscrowDetails(factory, address, publicKey);
++        const [status, full, latestLedger] = await Promise.all([
++          fetchEscrowStatus(factory, address, publicKey),
++          fetchEscrowDetails(factory, address, publicKey),
++          fetchLatestLedger().catch(() => null),
++        ]);
+         if (!cancelled) {
+           setDetails({ ...full, status: status || full.status, _address: address });
++          setCurrentLedger(latestLedger);
+           setLoading(false);
+           setActionError(null);
+         }
++        if (full?.token) {
++          const decimals = await fetchTokenDecimals(full.token, publicKey);
++          if (!cancelled) setTokenDecimals(decimals);
++        }
+       } catch (err) {
+         if (!cancelled) {
+           setError(err.message);
+@@ -352,7 +340,12 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+   const isBuyer = publicKey && details.buyer === publicKey;
+   const isSeller = publicKey && details.seller === publicKey;
+   const isArbiter = publicKey && details.arbiter === publicKey;
+-  const amountDisplay = (Number(details.amount) / 10 ** 7).toFixed(7);
++  const amountDisplay = (Number(details.amount) / 10 ** tokenDecimals).toFixed(
++    Math.min(tokenDecimals, 7)
++  );
++  const deadlineLedger = Number(details.deadline_ledger);
++  const deadlinePassed = currentLedger != null && currentLedger >= deadlineLedger;
++  const ledgersRemaining = currentLedger != null ? Math.max(0, deadlineLedger - currentLedger) : null;
+ 
+   return (
+     <div className="bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-2xl p-6 transition-colors">
+@@ -461,15 +454,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+                   className="bg-amber-600 hover:bg-amber-500"
+                 />
+               )}
+-              {status === "Funded" && isBuyer && (
+-                <ActionButton
+-                  label="Open Dispute"
+-                  loading={actionLoading === "disputeEscrow"}
+-                  onClick={() => handleAction(disputeEscrow, publicKey)}
+-                  className="bg-red-600 hover:bg-red-500"
+-                />
+-              )}
+-              {status === "Funded" && isSeller && (
++              {status === "Funded" && (isBuyer || isSeller) && (
+                 <ActionButton
+                   label="Open Dispute"
+                   loading={actionLoading === "disputeEscrow"}
+@@ -478,12 +463,20 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+                 />
+               )}
+               {status === "Funded" && isBuyer && (
+-                <ActionButton
+-                  label="Claim Timeout"
+-                  loading={actionLoading === "claimTimeout"}
+-                  onClick={() => handleAction(claimTimeout)}
+-                  className="bg-slate-600 hover:bg-slate-500"
+-                />
++                <div className="flex flex-col gap-1">
++                  <ActionButton
++                    label="Claim Timeout"
++                    loading={actionLoading === "claimTimeout"}
++                    disabled={!deadlinePassed}
++                    onClick={() => handleAction(claimTimeout)}
++                    className="bg-slate-600 hover:bg-slate-500"
++                  />
++                  {!deadlinePassed && ledgersRemaining != null && (
++                    <span className="text-[10px] text-gray-500">
++                      Deadline'a ~{ledgersRemaining} ledger var
++                    </span>
++                  )}
++                </div>
+               )}
+               {status === "Disputed" && isArbiter && (
+                 <>
+@@ -517,11 +510,12 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+   );
+ }
+ 
+-function ActionButton({ label, loading, onClick, className }) {
++function ActionButton({ label, loading, disabled, onClick, className }) {
+   return (
+     <button
+       onClick={onClick}
+-      disabled={loading}
++      disabled={loading || disabled}
++      title={disabled && !loading ? "Bu işlem şu an için kullanılamıyor" : undefined}
+       className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${className}`}
+     >
+       {loading ? (
+diff --git a/frontend/src/contracts.js b/frontend/src/contracts.js
+index 24c609b..68812a2 100644
+--- a/frontend/src/contracts.js
++++ b/frontend/src/contracts.js
+@@ -39,6 +39,70 @@ function normalizeEscrowData(data) {
+   return data;
+ }
+ 
++// ---------------------------------------------------------------------------
++// Contract error decoding
++//
++// The Escrow contract's business-logic checks (wrong status, unauthorized
++// caller, deadline not reached, ...) are defined as `EscrowError` codes in
++// contracts/common/src/lib.rs. Soroban RPC catches all of these during
++// *simulation*, before anything is ever signed or sent — `server
++// .prepareTransaction()` throws a raw diagnostic string in that case (see
++// `simResponse.error` in the SDK's rpc/server.js). That string contains a
++// substring like `Error(Contract, #4)`, which is the only place the specific
++// numeric error code is exposed; the compact on-chain TransactionResult XDR
++// used for post-send failures only carries a generic "trapped" code, not the
++// contract's custom error number, so those failures fall back to a plain
++// message instead of trying to decode a code that isn't there.
++// ---------------------------------------------------------------------------
++
++const CONTRACT_ERROR_MESSAGES = {
++  1: "Bu escrow hâlâ 'Pending' durumunda; bu işlem ancak fon yatırılmadan önce yapılabilir.",
++  2: "Bu işlem yalnızca 'Funded' durumundaki bir escrow üzerinde yapılabilir.",
++  3: "Bu escrow'da açık bir anlaşmazlık (dispute) yok.",
++  4: "Deadline ledger'ı henüz gelmedi; timeout talebi için erken.",
++  5: "Deadline zaten geçmiş görünüyor; bu haliyle escrow oluşturulamaz.",
++  6: "Geçersiz tutar (0 veya negatif olamaz).",
++  7: "Buyer ve seller aynı adres olamaz.",
++  8: "Bu işlemi yapmaya yetkin yok — cüzdanın bu escrow'daki buyer/seller/arbiter rolüyle eşleşmiyor.",
++  9: "Escrow bulunamadı ya da henüz başlatılmamış.",
++  10: "Kontrat WASM hash'i ayarlanmamış (factory yapılandırma sorunu).",
++};
++
++function parseSimulationErrorCode(message) {
++  const match = String(message || "").match(/Error\(Contract,\s*#(\d+)\)/);
++  return match ? Number(match[1]) : null;
++}
++
++// Wraps a thrown error from server.prepareTransaction()/simulateTransaction()
++// with a human-readable message when it recognizes the contract's error code,
++// while keeping the original diagnostic text accessible via `err.cause` for
++// debugging (visible in the browser console, not shown in the UI).
++function describeSimulationFailure(err) {
++  const raw = err instanceof Error ? err.message : String(err);
++  const code = parseSimulationErrorCode(raw);
++  const friendly =
++    code != null && CONTRACT_ERROR_MESSAGES[code]
++      ? CONTRACT_ERROR_MESSAGES[code]
++      : "İşlem simülasyonu başarısız oldu. Sözleşme koşulları şu an sağlanmıyor olabilir.";
++  const wrapped = new Error(friendly);
++  wrapped.cause = raw;
++  return wrapped;
++}
++
++// Post-send failures (rejected by the network, or failed after simulation
++// already passed — e.g. a concurrent transaction changed the escrow's state
++// first). The compact result XDR doesn't carry the contract's specific error
++// number, so we can only give a generic, non-cryptic explanation here.
++function describeSubmissionFailure(rawXdrOrMessage) {
++  const wrapped = new Error(
++    "İşlem zincire gönderildi ama başarısız oldu. Muhtemelen bu escrow'un durumu, işlemin " +
++      "onaylanmasından hemen önce başka bir işlemle değişti (örn. karşı taraf zaten release/dispute açtı). " +
++      "Sayfayı yenileyip güncel durumu kontrol et."
++  );
++  wrapped.cause = rawXdrOrMessage;
++  return wrapped;
++}
++
+ export async function fetchEscrows(factory, server, sourceAddress) {
+   if (!server) server = getServer();
+   if (!sourceAddress) return [];
+@@ -108,6 +172,44 @@ export async function fetchEscrowDetails(factory, address, sourceAddress) {
+   }
+ }
+ 
++// Reads the SEP-41 `decimals()` view of a token contract, so amount
++// formatting doesn't have to hardcode XLM's 7 decimals. Falls back to 7
++// (XLM's own precision) if the call fails, so a bad/unreachable token
++// contract never breaks the whole card.
++const decimalsCache = new Map();
++
++export async function fetchTokenDecimals(tokenAddress, sourceAddress, server) {
++  if (!tokenAddress || !sourceAddress) return 7;
++  if (decimalsCache.has(tokenAddress)) return decimalsCache.get(tokenAddress);
++
++  try {
++    if (!server) server = getServer();
++    const token = new Contract(tokenAddress);
++    const account = await server.getAccount(sourceAddress);
++    const tx = new TransactionBuilder(account, {
++      fee: "100000",
++      networkPassphrase: NETWORK_PASSPHRASE,
++    })
++      .addOperation(token.call("decimals"))
++      .setTimeout(30)
++      .build();
++
++    const result = await server.simulateTransaction(tx);
++    const decimals = result.result?.retval ? scValToNative(result.result.retval) : 7;
++    decimalsCache.set(tokenAddress, decimals);
++    return decimals;
++  } catch {
++    decimalsCache.set(tokenAddress, 7);
++    return 7;
++  }
++}
++
++export async function fetchLatestLedger(server) {
++  if (!server) server = getServer();
++  const latest = await server.getLatestLedger();
++  return latest.sequence;
++}
++
+ export async function fundEscrow(publicKey, escrowAddress, server) {
+   if (!server) server = getServer();
+   const escrow = new Contract(escrowAddress);
+@@ -232,8 +334,21 @@ export async function waitForTransaction(server, hash, { timeoutMs = 30000, inte
+   throw new Error("Timed out waiting for transaction confirmation.");
+ }
+ 
+-async function signAndSend(tx, server) {
+-  const preparedTx = await server.prepareTransaction(tx);
++// Shared by every write action (fund/release/refund/dispute/resolve/timeout/
++// cancel) and by CreateEscrowForm's submit handler. Centralizing this means
++// every action gets the same friendly-error treatment instead of each call
++// site inventing its own ad-hoc XDR slicing.
++export async function signAndSend(tx, server) {
++  let preparedTx;
++  try {
++    preparedTx = await server.prepareTransaction(tx);
++  } catch (err) {
++    // This is where ~all of the contract's business-logic checks
++    // (NotFunded, Unauthorized, DeadlineNotReached, ...) actually surface,
++    // because Soroban validates them during simulation, before signing.
++    throw describeSimulationFailure(err);
++  }
++
+   const xdr = preparedTx.toEnvelope
+     ? preparedTx.toEnvelope().toXDR("base64")
+     : preparedTx.toXDR();
+@@ -244,18 +359,12 @@ async function signAndSend(tx, server) {
+   const signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
+   const sendResult = await server.sendTransaction(signedTx);
+   if (sendResult.status === "ERROR") {
+-    const errMsg = sendResult.errorResultXdr
+-      ? "Transaction failed: " + sendResult.errorResultXdr.slice(0, 100)
+-      : "Transaction failed on-chain";
+-    throw new Error(errMsg);
++    throw describeSubmissionFailure(sendResult.errorResultXdr || "Transaction rejected on submit");
+   }
+ 
+   const finalResult = await waitForTransaction(server, sendResult.hash);
+   if (finalResult.status !== "SUCCESS") {
+-    const errMsg = finalResult.resultXdr
+-      ? "Transaction failed: " + String(finalResult.resultXdr).slice(0, 150)
+-      : "Transaction failed on-chain";
+-    throw new Error(errMsg);
++    throw describeSubmissionFailure(finalResult.resultXdr || "Transaction failed to apply on-chain");
+   }
+   return finalResult;
+ }
+@@ -293,4 +402,4 @@ export const EVENT_TOPICS = {
+   cancelled: "cancelled",
+   timeout: "timeout",
+   esc_new: "esc_new",
+-};
+\ No newline at end of file
++};
