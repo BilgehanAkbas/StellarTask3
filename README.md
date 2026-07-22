@@ -113,7 +113,37 @@ Pending ──fund()──▶ Funded ──release()──▶ Released
 
 ---
 
-## Prerequisites
+## Demo / Example Accounts (Testnet)
+
+These are the Stellar Testnet addresses used to produce the screenshots and
+demo walkthrough in this repo. Anyone reviewing the project can look these
+up directly on [stellar.expert](https://stellar.expert/explorer/testnet) or
+reuse them to interact with the deployed contracts.
+
+| Role | Address |
+|------|---------|
+| **Buyer** (main demo wallet) | `GC4B4EIUDYKAGLSJ6KVCV2NF22BWYOQFZHRUWXTMPM4Y2Q5CPBYNDONJ` |
+| **Seller** | `GD4JEB342IJ3W66YN3LU3AX5YNBVS7GVNPI6JYFK7REZAFM6YRI6QQKF` |
+| **Arbiter** | `GBZEE6RDWTAVZI3IWEESCPFO2IZUMCFMCEPRMH44F6S7PUADPDB2WH7R` |
+| **Token Contract ID** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+
+> ⚠️ These are Testnet-only demo keys with no real value — do not reuse them
+> on Mainnet or treat them as secrets.
+
+---
+
+## Recent Fixes (Frontend Error Handling)
+
+A few UX/correctness issues were found and fixed after initial testing:
+
+| Issue | Fix |
+|-------|-----|
+| Action buttons (Release / Open Dispute / Claim Timeout) showed a different, unreadable raw XDR/diagnostic string on every failure | Soroban surfaces contract-level errors (`EscrowError` codes) during **simulation**, inside `server.prepareTransaction()` — not at submit time. `contracts.js` now catches that specifically, extracts the numeric error code (`Error(Contract, #N)`), and maps it to a human-readable message via a shared `describeSimulationFailure()` helper used by every write action and by `CreateEscrowForm`. |
+| "Claim Timeout" was clickable before the deadline ledger was actually reached | `EscrowCard` now fetches the current ledger (`fetchLatestLedger()`) alongside escrow details and disables the button — showing ledgers-remaining — until `currentLedger >= deadline_ledger`. |
+| Duplicate JSX: "Open Dispute" was defined twice (once for buyer, once for seller) with identical code | Merged into a single `status === "Funded" && (isBuyer || isSeller)` block. |
+| Amount display assumed a hardcoded 7 decimals (correct for XLM, wrong for other SEP-41 tokens) | Added `fetchTokenDecimals()`, which reads the token contract's `decimals()` view (cached per token address) and drives the displayed amount instead of a hardcoded `10 ** 7`. |
+
+---
 
 | Tool               | Version    |
 |--------------------|------------|
