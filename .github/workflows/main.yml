@@ -32,7 +32,7 @@ jobs:
           cache-targets: true
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: cargo install soroban-cli --version ${{ env.SOROBAN_VERSION }}
