@@ -41,11 +41,11 @@ jobs:
         run: rustup target add wasm32v1-none
 
       - name: Build Escrow contract
-        run: stellar contract build -p escrow
+        run: stellar contract build --package escrow
         working-directory: contracts
 
       - name: Build Factory contract
-        run: stellar contract build -p factory
+        run: stellar contract build --package factory
         working-directory: contracts
 
       - name: Run contract tests
