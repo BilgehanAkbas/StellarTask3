@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  RUST_VERSION: "1.86.0"
+  SOROBAN_VERSION: "22.0.0"
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: wasm32v1-none
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            contracts/common -> target
+            contracts/escrow -> target
+            contracts/factory -> target
+
+      - name: Install Soroban CLI
+        run: cargo install soroban-cli --version ${{ env.SOROBAN_VERSION }}
+
+      - name: Add wasm target
+        run: rustup target add wasm32v1-none
+
+      - name: Build Escrow contract
+        run: stellar contract build -p escrow
+        working-directory: contracts
+
+      - name: Build Factory contract
+        run: stellar contract build -p factory
+        working-directory: contracts
+
+      - name: Run contract tests
+        run: cargo test --workspace -p escrow-common -p escrow -p factory
+        working-directory: contracts
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run frontend tests
+        run: npm test -- --watchAll=false
+        working-directory: frontend
+
+      - name: Lint
+        run: npx eslint src/
+        working-directory: frontend
