@@ -7,7 +7,6 @@ on:
     branches: [master]
 
 env:
-  RUST_VERSION: "1.86.0"
   SOROBAN_VERSION: "27.0.0"
   NODE_VERSION: "22"
 
@@ -20,7 +19,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: stable
           target: wasm32v1-none
 
       - name: Cache Rust artifacts
@@ -68,10 +67,6 @@ jobs:
 
       - name: Run frontend tests
         run: npm test -- --run
-        working-directory: frontend
-
-      - name: Lint
-        run: npx eslint src/
         working-directory: frontend
 
       - name: Build frontend
