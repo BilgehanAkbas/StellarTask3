@@ -281,7 +281,7 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
   );
 }
 
-function EscrowCard({ address, publicKey, onActionComplete, demoMode }) {
+function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -312,7 +312,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode }) {
     return () => {
       cancelled = true;
     };
-  }, [address, publicKey]);
+  }, [address, publicKey, refreshKey]);
 
   const handleAction = useCallback(async (actionFn, ...args) => {
     setActionError(null);
@@ -758,6 +758,7 @@ export function App() {
                   publicKey={demoMode ? null : publicKey}
                   onActionComplete={handleCreated}
                   demoMode={demoMode}
+                  refreshKey={refreshKey}
                 />
               ))}
             </div>
