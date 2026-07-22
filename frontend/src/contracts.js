@@ -20,6 +20,25 @@ export function getServer() {
   return new rpc.Server(RPC_URL);
 }
 
+// Soroban encodes a simple (unit-variant-only) Rust enum, like EscrowStatus,
+// as an ScVec containing a single Symbol — e.g. EscrowStatus::Funded becomes
+// ["Funded"] once decoded via scValToNative, not the bare string "Funded".
+// Every status comparison in the UI (`status === "Funded"`) needs a plain
+// string, so unwrap it here, once, centrally.
+function unwrapEnum(value) {
+  if (Array.isArray(value) && value.length === 1 && typeof value[0] === "string") {
+    return value[0];
+  }
+  return value;
+}
+
+function normalizeEscrowData(data) {
+  if (data && typeof data === "object" && "status" in data) {
+    return { ...data, status: unwrapEnum(data.status) };
+  }
+  return data;
+}
+
 export async function fetchEscrows(factory, server, sourceAddress) {
   if (!server) server = getServer();
   if (!sourceAddress) return [];
@@ -58,7 +77,7 @@ export async function fetchEscrowStatus(factory, address, sourceAddress) {
 
     const result = await server.simulateTransaction(tx);
     if (result.result?.retval) {
-      return scValToNative(result.result.retval);
+      return unwrapEnum(scValToNative(result.result.retval));
     }
     throw new Error("No return value");
   } catch (err) {
@@ -81,7 +100,7 @@ export async function fetchEscrowDetails(factory, address, sourceAddress) {
 
     const result = await server.simulateTransaction(tx);
     if (result.result?.retval) {
-      return scValToNative(result.result.retval);
+      return normalizeEscrowData(scValToNative(result.result.retval));
     }
     throw new Error("No return value");
   } catch (err) {
