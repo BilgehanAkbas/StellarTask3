@@ -138,7 +138,8 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
           networkPassphrase: NETWORK_PASSPHRASE,
         });
 
-        const txResult = await server.sendTransaction(signed);
+        const signedTx = TransactionBuilder.fromXDR(signed, NETWORK_PASSPHRASE);
+        const txResult = await server.sendTransaction(signedTx);
         if (txResult.status === "ERROR") {
           if (txResult.errorResultXdr) {
             throw new Error("Transaction failed: " + txResult.errorResultXdr.slice(0, 100));

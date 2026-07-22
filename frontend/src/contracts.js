@@ -199,11 +199,13 @@ export async function cancelEscrow(publicKey, escrowAddress, initiator, server) 
 }
 
 async function signAndSend(tx, server) {
-  const { signedTxXdr } = await signTransaction(tx, {
+  const xdr = tx.toEnvelope ? tx.toEnvelope().toXDR("base64") : tx.toXDR();
+  const { signedTxXdr } = await signTransaction(xdr, {
     network: NETWORK_PASSPHRASE,
     networkPassphrase: NETWORK_PASSPHRASE,
   });
-  const txResult = await server.sendTransaction(signedTxXdr);
+  const signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
+  const txResult = await server.sendTransaction(signedTx);
   if (txResult.status === "ERROR") {
     const errMsg = txResult.errorResultXdr
       ? "Transaction failed: " + txResult.errorResultXdr.slice(0, 100)
