@@ -6,6 +6,7 @@ import {
   TransactionBuilder,
   Networks,
 } from "@stellar/stellar-sdk";
+import { signTransaction } from "@stellar/freighter-api";
 import { useFreighter } from "./hooks/useFreighter.js";
 import {
   fetchEscrows,
@@ -130,10 +131,10 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
           .setTimeout(30)
           .build();
 
-        const signed = await window.freighter.signTransaction(
-          tx.toXDR(),
-          { network: NETWORK_PASSPHRASE, networkPassphrase: NETWORK_PASSPHRASE }
-        );
+        const signed = await signTransaction(tx.toXDR(), {
+          network: NETWORK_PASSPHRASE,
+          networkPassphrase: NETWORK_PASSPHRASE,
+        });
 
         const txResult = await server.sendTransaction(signed);
         if (txResult.status === "ERROR") {

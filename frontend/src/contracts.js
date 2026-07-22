@@ -6,6 +6,7 @@ import {
   TransactionBuilder,
   Networks,
 } from "@stellar/stellar-sdk";
+import { signTransaction } from "@stellar/freighter-api";
 
 const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT_ID;
 const RPC_URL = import.meta.env.VITE_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
@@ -198,10 +199,10 @@ export async function cancelEscrow(publicKey, escrowAddress, initiator, server) 
 }
 
 async function signAndSend(tx, server) {
-  const signed = await window.freighter.signTransaction(
-    tx.toXDR(),
-    { network: NETWORK_PASSPHRASE, networkPassphrase: NETWORK_PASSPHRASE }
-  );
+  const signed = await signTransaction(tx.toXDR(), {
+    network: NETWORK_PASSPHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  });
   const txResult = await server.sendTransaction(signed);
   if (txResult.status === "ERROR") {
     const errMsg = txResult.errorResultXdr

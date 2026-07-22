@@ -1,4 +1,5 @@
 ﻿import { useState, useCallback, useEffect } from "react";
+import { isConnected, getAddress, requestAccess } from "@stellar/freighter-api";
 
 export function useFreighter() {
   const [publicKey, setPublicKey] = useState(null);
@@ -9,13 +10,14 @@ export function useFreighter() {
     setError(null);
     setLoading(true);
     try {
-      if (!window.freighterApi && !window.freighter) {
+      const connected = await isConnected();
+      if (!connected || !connected.isConnected) {
         throw new Error("Freighter extension not detected. Install from https://freighter.app");
       }
-      const api = window.freighterApi || window.freighter;
-      const key = await api.getPublicKey();
-      if (!key) throw new Error("No account selected in Freighter.");
-      setPublicKey(key);
+      await requestAccess();
+      const { address } = await getAddress();
+      if (!address) throw new Error("No account selected in Freighter.");
+      setPublicKey(address);
     } catch (err) {
       setError(err.message || "Failed to connect Freighter");
     } finally {
