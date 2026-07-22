@@ -131,7 +131,7 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
           .setTimeout(30)
           .build();
 
-        const { signedTxXdr: signed } = await signTransaction(tx.toXDR(), {
+        const { signedTxXdr: signed } = await signTransaction(tx, {
           network: NETWORK_PASSPHRASE,
           networkPassphrase: NETWORK_PASSPHRASE,
         });

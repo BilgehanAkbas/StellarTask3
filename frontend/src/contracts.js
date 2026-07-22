@@ -199,7 +199,7 @@ export async function cancelEscrow(publicKey, escrowAddress, initiator, server) 
 }
 
 async function signAndSend(tx, server) {
-  const { signedTxXdr } = await signTransaction(tx.toXDR(), {
+  const { signedTxXdr } = await signTransaction(tx, {
     network: NETWORK_PASSPHRASE,
     networkPassphrase: NETWORK_PASSPHRASE,
   });
