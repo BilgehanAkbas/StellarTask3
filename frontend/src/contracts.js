@@ -198,6 +198,18 @@ export async function cancelEscrow(publicKey, escrowAddress, initiator, server) 
   return signAndSend(tx, server);
 }
 
+export async function waitForTransaction(server, hash, { timeoutMs = 30000, intervalMs = 1500 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const result = await server.getTransaction(hash);
+    if (result.status !== "NOT_FOUND") {
+      return result;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error("Timed out waiting for transaction confirmation.");
+}
+
 async function signAndSend(tx, server) {
   const preparedTx = await server.prepareTransaction(tx);
   const xdr = preparedTx.toEnvelope
@@ -208,14 +220,22 @@ async function signAndSend(tx, server) {
     networkPassphrase: NETWORK_PASSPHRASE,
   });
   const signedTx = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
-  const txResult = await server.sendTransaction(signedTx);
-  if (txResult.status === "ERROR") {
-    const errMsg = txResult.errorResultXdr
-      ? "Transaction failed: " + txResult.errorResultXdr.slice(0, 100)
+  const sendResult = await server.sendTransaction(signedTx);
+  if (sendResult.status === "ERROR") {
+    const errMsg = sendResult.errorResultXdr
+      ? "Transaction failed: " + sendResult.errorResultXdr.slice(0, 100)
       : "Transaction failed on-chain";
     throw new Error(errMsg);
   }
-  return txResult;
+
+  const finalResult = await waitForTransaction(server, sendResult.hash);
+  if (finalResult.status !== "SUCCESS") {
+    const errMsg = finalResult.resultXdr
+      ? "Transaction failed: " + String(finalResult.resultXdr).slice(0, 150)
+      : "Transaction failed on-chain";
+    throw new Error(errMsg);
+  }
+  return finalResult;
 }
 
 export async function pollContractEvents(startLedger, filters) {

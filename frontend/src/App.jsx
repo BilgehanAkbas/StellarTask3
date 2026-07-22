@@ -20,6 +20,7 @@ import {
   claimTimeout,
   cancelEscrow,
   pollContractEvents,
+  waitForTransaction,
   STATUS_LABEL,
   EVENT_TOPICS,
 } from "./contracts.js";
@@ -27,6 +28,18 @@ import {
 const RPC_URL = import.meta.env.VITE_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = import.meta.env.VITE_NETWORK_PASSPHRASE || Networks.TESTNET;
 const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT_ID;
+
+// Converts a decimal string amount (e.g. "12.5") into stroops (1 XLM = 10,000,000
+// stroops) using string/BigInt math instead of floating-point multiplication,
+// which can silently round some decimal values up or down by a unit.
+function parseAmountToStroops(amountStr) {
+  const trimmed = (amountStr || "0").trim();
+  const [wholePart, fracPart = ""] = trimmed.split(".");
+  const fracPadded = (fracPart + "0000000").slice(0, 7);
+  const whole = BigInt(wholePart || "0");
+  const frac = BigInt(fracPadded || "0");
+  return whole * 10_000_000n + frac;
+}
 
 const EVENT_POLL_INTERVAL = 5000;
 
@@ -104,12 +117,22 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
     async (e) => {
       e.preventDefault();
       setError(null);
+
+      const trimmedSeller = form.seller.trim();
+      if (trimmedSeller && publicKey && trimmedSeller === publicKey.trim()) {
+        setError("Seller address cannot be the same as your buyer (wallet) address.");
+        return;
+      }
+
       setLoading(true);
       try {
-        const amountRaw = BigInt(Math.floor(parseFloat(form.amount) * 10 ** 7));
+        const amountRaw = parseAmountToStroops(form.amount);
         const server = new rpc.Server(RPC_URL);
         const factory = new Contract(FACTORY_ID);
         const sourceAccount = await server.getAccount(publicKey);
+        const latestLedger = await server.getLatestLedger();
+        const deadlineLedger =
+          latestLedger.sequence + parseInt(form.deadlineDays, 10) * 17280;
 
         const tx = new TransactionBuilder(sourceAccount, {
           fee: "100000",
@@ -123,9 +146,7 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
               nativeToScVal(form.arbiter),
               nativeToScVal(form.token),
               nativeToScVal(amountRaw),
-              nativeToScVal(
-                Math.floor(Date.now() / 5000) + parseInt(form.deadlineDays) * 17280
-              )
+              nativeToScVal(deadlineLedger)
             )
           )
           .setTimeout(30)
@@ -142,13 +163,23 @@ function CreateEscrowForm({ publicKey, onCreated, disabled }) {
         });
 
         const signedTx = TransactionBuilder.fromXDR(signed, NETWORK_PASSPHRASE);
-        const txResult = await server.sendTransaction(signedTx);
-        if (txResult.status === "ERROR") {
-          if (txResult.errorResultXdr) {
-            throw new Error("Transaction failed: " + txResult.errorResultXdr.slice(0, 100));
+        const sendResult = await server.sendTransaction(signedTx);
+        if (sendResult.status === "ERROR") {
+          if (sendResult.errorResultXdr) {
+            throw new Error("Transaction failed: " + sendResult.errorResultXdr.slice(0, 100));
           }
           throw new Error("Transaction failed on-chain");
         }
+
+        const finalResult = await waitForTransaction(server, sendResult.hash);
+        if (finalResult.status !== "SUCCESS") {
+          throw new Error(
+            finalResult.resultXdr
+              ? "Transaction failed: " + String(finalResult.resultXdr).slice(0, 150)
+              : "Transaction failed on-chain"
+          );
+        }
+
         setForm({ seller: "", arbiter: "", token: "", amount: "", deadlineDays: "7" });
         onCreated();
       } catch (err) {
