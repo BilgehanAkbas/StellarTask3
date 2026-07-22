@@ -293,9 +293,10 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode }) {
     let cancelled = false;
     async function load() {
       try {
+        if (!publicKey) return;
         const factory = new Contract(FACTORY_ID);
-        const status = await fetchEscrowStatus(factory, address);
-        const full = await fetchEscrowDetails(factory, address);
+        const status = await fetchEscrowStatus(factory, address, publicKey);
+        const full = await fetchEscrowDetails(factory, address, publicKey);
         if (!cancelled) {
           setDetails({ ...full, status: status || full.status, _address: address });
           setLoading(false);
@@ -311,7 +312,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode }) {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, publicKey]);
 
   const handleAction = useCallback(async (actionFn, ...args) => {
     setActionError(null);
@@ -586,7 +587,7 @@ export function App() {
         setEscrowsLoading(false);
         return;
       }
-      const list = await fetchEscrows(new Contract(FACTORY_ID));
+      const list = await fetchEscrows(new Contract(FACTORY_ID), undefined, effectivePublicKey);
       setEscrows(Array.isArray(list) ? list : []);
     } catch (err) {
       setEscrowsError(err.message);

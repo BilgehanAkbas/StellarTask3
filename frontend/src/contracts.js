@@ -20,10 +20,11 @@ export function getServer() {
   return new rpc.Server(RPC_URL);
 }
 
-export async function fetchEscrows(factory, server) {
+export async function fetchEscrows(factory, server, sourceAddress) {
   if (!server) server = getServer();
+  if (!sourceAddress) return [];
   try {
-    const account = await server.getAccount(factory.contractId);
+    const account = await server.getAccount(sourceAddress);
     const tx = new TransactionBuilder(account, {
       fee: "100000",
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -42,10 +43,11 @@ export async function fetchEscrows(factory, server) {
   }
 }
 
-export async function fetchEscrowStatus(factory, address) {
+export async function fetchEscrowStatus(factory, address, sourceAddress) {
   try {
     const server = getServer();
-    const account = await server.getAccount(factory.contractId);
+    if (!sourceAddress) throw new Error("No wallet address available for simulation");
+    const account = await server.getAccount(sourceAddress);
     const tx = new TransactionBuilder(account, {
       fee: "100000",
       networkPassphrase: NETWORK_PASSPHRASE,
@@ -64,10 +66,11 @@ export async function fetchEscrowStatus(factory, address) {
   }
 }
 
-export async function fetchEscrowDetails(factory, address) {
+export async function fetchEscrowDetails(factory, address, sourceAddress) {
   try {
     const server = getServer();
-    const account = await server.getAccount(factory.contractId);
+    if (!sourceAddress) throw new Error("No wallet address available for simulation");
+    const account = await server.getAccount(sourceAddress);
     const tx = new TransactionBuilder(account, {
       fee: "100000",
       networkPassphrase: NETWORK_PASSPHRASE,
