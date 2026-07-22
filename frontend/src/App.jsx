@@ -300,6 +300,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
         if (!cancelled) {
           setDetails({ ...full, status: status || full.status, _address: address });
           setLoading(false);
+          setActionError(null);
         }
       } catch (err) {
         if (!cancelled) {

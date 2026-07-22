@@ -1,0 +1,25 @@
+From b033a1f019f21e90ef0746ba0f1a2da51b86e47b Mon Sep 17 00:00:00 2001
+From: fix-bot <bot@local>
+Date: Wed, 22 Jul 2026 20:41:34 +0000
+Subject: [PATCH] fix: clear stale action error once escrow status/details
+ refresh succeeds
+
+---
+ frontend/src/App.jsx | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index d999c76..391ae3f 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -300,6 +300,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+         if (!cancelled) {
+           setDetails({ ...full, status: status || full.status, _address: address });
+           setLoading(false);
++          setActionError(null);
+         }
+       } catch (err) {
+         if (!cancelled) {
+-- 
+2.43.0
+
