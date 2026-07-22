@@ -9,7 +9,7 @@ are paired with a mobile-responsive React frontend and a CI/CD pipeline.
 
 | Resource | Link |
 |----------|------|
-| **Frontend (Vercel)** | _Deploy edildikten sonra eklenecek_ |
+| **Frontend (Vercel)** | [stellar-task3.vercel.app](https://stellar-task3.vercel.app/) |
 | **Factory Contract** | [CABYZH6P4DCMQMWF2R3OPJXG64EBLNAXJZYZIFAWT3GRGVZOHXLP6I66](https://stellar.expert/explorer/testnet/contract/CABYZH6P4DCMQMWF2R3OPJXG64EBLNAXJZYZIFAWT3GRGVZOHXLP6I66) |
 | **Deploy Transaction** | [2c86d7...06dd](https://stellar.expert/explorer/testnet/tx/2c86d7176c040116c973cfa0370a2391a9521f71f4cacd6dffff8d58f97206dd) |
 | **Escrow Wasm Upload** | [807253...f1c6](https://stellar.expert/explorer/testnet/tx/80725374e35a17d79b1a8dc7ecf8dc7783ee89e6c8294862293d205bad69f1c6) |
@@ -255,9 +255,9 @@ The frontend polls Soroban RPC for contract events every 5 seconds and displays 
 |-------------|--------|
 | Public GitHub repository | [StellarTask3](https://github.com/BilgehanAkbas/StellarTask3) |
 | README with complete documentation | Done |
-| 10+ meaningful commits | 7 commits (build/deploy commits pending) |
-| Live demo link (Vercel) | Pending deploy |
+| 10+ meaningful commits | Done |
+| Live demo link (Vercel) | [stellar-task3.vercel.app](https://stellar-task3.vercel.app/) |
 | Contract deployment address | `CABYZH6P4...I66` |
 | Transaction hash for contract interaction | `2c86d7...06dd` |
-| Screenshots (mobile, CI, tests) | See `/screenshots` (pending) |
+| Screenshots (mobile, CI, tests) | See `/screenshots` |
 | Demo video link (1-2 min) | Pending |
