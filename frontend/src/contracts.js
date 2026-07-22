@@ -85,6 +85,147 @@ export async function fetchEscrowDetails(factory, address) {
   }
 }
 
+export async function fundEscrow(publicKey, escrowAddress, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("fund"))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function releaseEscrow(publicKey, escrowAddress, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("release"))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function refundEscrow(publicKey, escrowAddress, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("refund"))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function disputeEscrow(publicKey, escrowAddress, initiator, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("open_dispute", nativeToScVal(initiator)))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function resolveDispute(publicKey, escrowAddress, releaseToSeller, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("resolve_dispute", nativeToScVal(releaseToSeller)))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function claimTimeout(publicKey, escrowAddress, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("claim_timeout_refund"))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+export async function cancelEscrow(publicKey, escrowAddress, initiator, server) {
+  if (!server) server = getServer();
+  const escrow = new Contract(escrowAddress);
+  const sourceAccount = await server.getAccount(publicKey);
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(escrow.call("cancel", nativeToScVal(initiator)))
+    .setTimeout(30)
+    .build();
+
+  return signAndSend(tx, server);
+}
+
+async function signAndSend(tx, server) {
+  const signed = await window.freighter.signTransaction(
+    tx.toXDR(),
+    { network: NETWORK_PASSPHRASE, networkPassphrase: NETWORK_PASSPHRASE }
+  );
+  const txResult = await server.sendTransaction(signed);
+  if (txResult.status === "ERROR") {
+    const errMsg = txResult.errorResultXdr
+      ? "Transaction failed: " + txResult.errorResultXdr.slice(0, 100)
+      : "Transaction failed on-chain";
+    throw new Error(errMsg);
+  }
+  return txResult;
+}
+
+export async function pollContractEvents(startLedger, filters) {
+  try {
+    const server = getServer();
+    const response = await server.getEvents({
+      startLedger,
+      filters,
+      limit: 100,
+    });
+    return response.events || [];
+  } catch {
+    return [];
+  }
+}
+
 export const STATUS_LABEL = {
   Pending: "Pending",
   Funded: "Funded",
@@ -92,4 +233,16 @@ export const STATUS_LABEL = {
   Released: "Released",
   Refunded: "Refunded",
   Cancelled: "Cancelled",
+};
+
+export const EVENT_TOPICS = {
+  created: "created",
+  funded: "funded",
+  released: "released",
+  refunded: "refunded",
+  disputed: "disputed",
+  resolved: "resolved",
+  cancelled: "cancelled",
+  timeout: "timeout",
+  esc_new: "esc_new",
 };
