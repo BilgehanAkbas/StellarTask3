@@ -18,12 +18,17 @@ export default [
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
     },
+    settings: {
+      react: { version: "detect" },
+    },
     rules: {
       ...js.configs.recommended.rules,
+      ...reactPlugin.configs.flat.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "react/jsx-uses-react": "off",
       "react/react-in-jsx-scope": "off",
+      "react/prop-types": "off",
     },
   },
 ];

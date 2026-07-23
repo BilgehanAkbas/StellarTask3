@@ -1,0 +1,35 @@
+diff --git a/frontend/eslint.config.js b/frontend/eslint.config.js
+index 085fa79..ecf97e2 100644
+--- a/frontend/eslint.config.js
++++ b/frontend/eslint.config.js
+@@ -18,12 +18,17 @@ export default [
+       "react-hooks": reactHooks,
+       "react-refresh": reactRefresh,
+     },
++    settings: {
++      react: { version: "detect" },
++    },
+     rules: {
+       ...js.configs.recommended.rules,
++      ...reactPlugin.configs.flat.recommended.rules,
+       ...reactHooks.configs.recommended.rules,
+       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+       "react/jsx-uses-react": "off",
+       "react/react-in-jsx-scope": "off",
++      "react/prop-types": "off",
+     },
+   },
+ ];
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index be014cd..60609d3 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -473,7 +473,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
+                   />
+                   {!deadlinePassed && ledgersRemaining != null && (
+                     <span className="text-[10px] text-gray-500">
+-                      Deadline'a ~{ledgersRemaining} ledger var
++                      Deadline&apos;a ~{ledgersRemaining} ledger var
+                     </span>
+                   )}
+                 </div>

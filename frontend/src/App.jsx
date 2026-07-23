@@ -473,7 +473,7 @@ function EscrowCard({ address, publicKey, onActionComplete, demoMode, refreshKey
                   />
                   {!deadlinePassed && ledgersRemaining != null && (
                     <span className="text-[10px] text-gray-500">
-                      Deadline'a ~{ledgersRemaining} ledger var
+                      Deadline&apos;a ~{ledgersRemaining} ledger var
                     </span>
                   )}
                 </div>
