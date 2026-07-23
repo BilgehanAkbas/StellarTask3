@@ -58,7 +58,7 @@ echo "[5/5] Updating frontend .env..."
 cat > frontend/.env << EOFF
 VITE_FACTORY_CONTRACT_ID=$FACTORY_ID
 VITE_ESCROW_WASM_HASH=$ESCROW_WASM_HASH
-VITE_RPC_URL=https://soroban-testnet.stellar.org
+VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 VITE_NETWORK=testnet
 VITE_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 EOFF

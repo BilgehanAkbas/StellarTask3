@@ -127,49 +127,41 @@ export async function fetchEscrows(factory, server, sourceAddress) {
 }
 
 export async function fetchEscrowStatus(factory, address, sourceAddress) {
-  try {
-    const server = getServer();
-    if (!sourceAddress) throw new Error("No wallet address available for simulation");
-    const account = await server.getAccount(sourceAddress);
-    const tx = new TransactionBuilder(account, {
-      fee: "100000",
-      networkPassphrase: NETWORK_PASSPHRASE,
-    })
-      .addOperation(factory.call("get_escrow_status", nativeToScVal(address, { type: "address" })))
-      .setTimeout(30)
-      .build();
+  const server = getServer();
+  if (!sourceAddress) throw new Error("No wallet address available for simulation");
+  const account = await server.getAccount(sourceAddress);
+  const tx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(factory.call("get_escrow_status", nativeToScVal(address, { type: "address" })))
+    .setTimeout(30)
+    .build();
 
-    const result = await server.simulateTransaction(tx);
-    if (result.result?.retval) {
-      return unwrapEnum(scValToNative(result.result.retval));
-    }
-    throw new Error("No return value");
-  } catch (err) {
-    throw err;
+  const result = await server.simulateTransaction(tx);
+  if (result.result?.retval) {
+    return unwrapEnum(scValToNative(result.result.retval));
   }
+  throw new Error("No return value");
 }
 
 export async function fetchEscrowDetails(factory, address, sourceAddress) {
-  try {
-    const server = getServer();
-    if (!sourceAddress) throw new Error("No wallet address available for simulation");
-    const account = await server.getAccount(sourceAddress);
-    const tx = new TransactionBuilder(account, {
-      fee: "100000",
-      networkPassphrase: NETWORK_PASSPHRASE,
-    })
-      .addOperation(factory.call("get_escrow_details", nativeToScVal(address, { type: "address" })))
-      .setTimeout(30)
-      .build();
+  const server = getServer();
+  if (!sourceAddress) throw new Error("No wallet address available for simulation");
+  const account = await server.getAccount(sourceAddress);
+  const tx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(factory.call("get_escrow_details", nativeToScVal(address, { type: "address" })))
+    .setTimeout(30)
+    .build();
 
-    const result = await server.simulateTransaction(tx);
-    if (result.result?.retval) {
-      return normalizeEscrowData(scValToNative(result.result.retval));
-    }
-    throw new Error("No return value");
-  } catch (err) {
-    throw err;
+  const result = await server.simulateTransaction(tx);
+  if (result.result?.retval) {
+    return normalizeEscrowData(scValToNative(result.result.retval));
   }
+  throw new Error("No return value");
 }
 
 // Reads the SEP-41 `decimals()` view of a token contract, so amount

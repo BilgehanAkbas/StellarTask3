@@ -81,9 +81,8 @@ Pending ──fund()──▶ Funded ──release()──▶ Released
 
 ```
 .
-├── .github/workflows/main.yml   # CI/CD pipeline
+├── .github/workflows/main.yml   # CI/CD pipeline (build, lint, test, deploy)
 ├── contracts/
-│   ├── Cargo.toml               # Workspace root
 │   ├── common/
 │   │   ├── Cargo.toml
 │   │   └── src/lib.rs           # Shared types, errors, EscrowInterface
@@ -95,21 +94,35 @@ Pending ──fund()──▶ Funded ──release()──▶ Released
 │       └── src/lib.rs           # Factory contract + 4 tests
 ├── scripts/
 │   └── deploy.sh                # Automated deploy script
+├── screenshots/                 # Mobile UI, CI pipeline, test output
 ├── frontend/
 │   ├── package.json
 │   ├── vercel.json              # Vercel deploy config
 │   ├── vite.config.js
+│   ├── eslint.config.js         # Flat ESLint config (React + hooks rules)
 │   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── index.html
 │   ├── .env.example
 │   └── src/
+│       ├── main.jsx             # React entrypoint
+│       ├── index.css            # Tailwind directives
 │       ├── App.jsx              # Main UI (mobile-responsive, event streaming)
 │       ├── App.test.jsx         # 3 frontend tests
 │       ├── contracts.js         # Soroban client helpers + event polling
 │       ├── hooks/useFreighter.js
 │       └── test-setup.js
-├── Cargo.toml
+├── Cargo.toml                    # Workspace root
 └── README.md
 ```
+
+---
+
+## Screenshots
+
+| Mobile Responsive UI | CI/CD Pipeline | Test Output (13 passing) |
+|---|---|---|
+| ![Mobile UI](screenshots/01-Mobile-responsive-UI.png) | ![CI Pipeline](screenshots/02-ci-pipeline.png) | ![Test Output](screenshots/03-test-output.png) |
 
 ---
 
@@ -142,6 +155,23 @@ A few UX/correctness issues were found and fixed after initial testing:
 | "Claim Timeout" was clickable before the deadline ledger was actually reached | `EscrowCard` now fetches the current ledger (`fetchLatestLedger()`) alongside escrow details and disables the button — showing ledgers-remaining — until `currentLedger >= deadline_ledger`. |
 | Duplicate JSX: "Open Dispute" was defined twice (once for buyer, once for seller) with identical code | Merged into a single `status === "Funded" && (isBuyer || isSeller)` block. |
 | Amount display assumed a hardcoded 7 decimals (correct for XLM, wrong for other SEP-41 tokens) | Added `fetchTokenDecimals()`, which reads the token contract's `decimals()` view (cached per token address) and drives the displayed amount instead of a hardcoded `10 ** 7`. |
+
+---
+
+## Repo Hygiene / CI Fixes (Latest Pass)
+
+A full review of the repo — actually running `npm ci`, `npm run lint`, `npm test`, and `npm run build`, not just reading the code — turned up a few real issues, now fixed:
+
+| Issue | Fix |
+|-------|-----|
+| `npm run lint` failed outright — ESLint 9 requires a flat `eslint.config.js`, which didn't exist even though the lint dependencies (`@eslint/js`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`) were already in `package.json` | Added `frontend/eslint.config.js`. Also added `eslint-plugin-react` so components that are only referenced inside JSX (e.g. `<EscrowCard />`) aren't flagged as unused. |
+| `contracts.js` had two `try { ... } catch (err) { throw err; }` blocks that caught and rethrew the same error unchanged (`no-useless-catch`) | Removed both no-op wrappers in `fetchEscrowStatus` / `fetchEscrowDetails`. |
+| CI workflow never actually ran ESLint, even though the README claimed it did | Added a `Lint` step to the `frontend` job in `.github/workflows/main.yml`, right after `npm ci` and before tests. |
+| `frontend/.env.example` and `scripts/deploy.sh` wrote `VITE_RPC_URL`, but `contracts.js` / `App.jsx` actually read `VITE_SOROBAN_RPC_URL` — harmless only because the code falls back to the same default testnet URL, but misleading for anyone pointing at a different RPC | Renamed the variable in both files to `VITE_SOROBAN_RPC_URL`. |
+| Two stray debug artifacts were committed to the repo (`full-fix.diff`, `frontend/sdk_exports.txt`) — leftover scratch files, not part of the app | Removed both. |
+| README's repository-structure diagram showed `Cargo.toml` nested inside `contracts/`, but it actually lives at the repo root | Corrected the diagram and added files that were missing from it (`eslint.config.js`, `main.jsx`, `index.css`, `postcss.config.js`, `index.html`). |
+
+After these fixes, `npm run lint` passes with zero warnings, and `npm test -- --run` / `npm run build` both still pass cleanly.
 
 ---
 
@@ -217,8 +247,10 @@ The GitHub Actions pipeline (`.github/workflows/main.yml`) runs on every push
 and PR to `master`:
 
 - **contracts job**: Installs Rust + Soroban CLI 27.0.0, builds escrow & factory WASM, runs `cargo test` (10 tests).
-- **frontend job**: Installs Node 22, runs `npm test` (3 tests), `eslint`, and `vite build`.
+- **frontend job**: Installs Node 22 (`npm ci`), runs `npm run lint` (ESLint, flat config), `npm test -- --run` (3 tests), then `npm run build` (Vite production build).
 - **deployment**: Vercel auto-deploys on push via Git integration.
+
+Both jobs run in parallel and must pass before a push/PR is considered green.
 
 ---
 
@@ -285,9 +317,18 @@ The frontend polls Soroban RPC for contract events every 5 seconds and displays 
 |-------------|--------|
 | Public GitHub repository | [StellarTask3](https://github.com/BilgehanAkbas/StellarTask3) |
 | README with complete documentation | Done |
-| 10+ meaningful commits | Done |
+| 10+ meaningful commits | Done (29+) |
 | Live demo link (Vercel) | [stellar-task3.vercel.app](https://stellar-task3.vercel.app/) |
 | Contract deployment address | `CABYZH6P4...I66` |
 | Transaction hash for contract interaction | `2c86d7...06dd` |
-| Screenshots (mobile, CI, tests) | See `/screenshots` |
-| Demo video link (1-2 min) | Pending |
+| Screenshot: mobile responsive UI | ✅ See [Screenshots](#screenshots) |
+| Screenshot: CI/CD pipeline running | ✅ See [Screenshots](#screenshots) |
+| Screenshot: test output, 3+ passing tests | ✅ See [Screenshots](#screenshots) — 13 tests passing |
+| Inter-contract communication | ✅ Factory ↔ Escrow via `EscrowClient` (see Architecture) |
+| Event streaming & real-time updates | ✅ 9 event types, 5s polling (see Event Streaming) |
+| CI/CD pipeline | ✅ Lint + test + build on every push/PR (see CI/CD) |
+| Error handling & loading states | ✅ Simulation-error decoding, loading skeletons, connectivity fallback |
+| Tests for contracts and frontend | ✅ 10 contract tests + 3 frontend tests, all passing |
+| **Demo video link (1–2 min)** | ⚠️ **Not yet added** — record a short walkthrough (create escrow → fund → release/dispute) and paste the link here before final submission |
+
+---
