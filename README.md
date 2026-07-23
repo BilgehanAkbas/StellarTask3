@@ -329,6 +329,6 @@ The frontend polls Soroban RPC for contract events every 5 seconds and displays 
 | CI/CD pipeline | ✅ Lint + test + build on every push/PR (see CI/CD) |
 | Error handling & loading states | ✅ Simulation-error decoding, loading skeletons, connectivity fallback |
 | Tests for contracts and frontend | ✅ 10 contract tests + 3 frontend tests, all passing |
-| **Demo video link (1–2 min)** | ⚠️ **Not yet added** — record a short walkthrough (create escrow → fund → release/dispute) and paste the link here before final submission |
+| **Demo video link (1–2 min)** | ✅ https://youtu.be/Rk6i_c9NG3Y |
 
 ---
