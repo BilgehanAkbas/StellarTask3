@@ -25,3 +25,7 @@ Thumbs.db
 # Test snapshots (generated)
 contracts/escrow/test_snapshots/
 contracts/factory/test_snapshots/
+
+# Generated test output
+test-output.txt
+*.patch
